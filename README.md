@@ -51,11 +51,15 @@ deep to master — and it teaches you to draw better as you play.
 | | |
 |---|---|
 | ♾️ **Endless play** | Deterministic procedural shapes — photo #N is always the same, so it's fair *and* infinite. |
-| 🖌️ **6 brushes** | Comet, Ribbon, Sparkler, plus **Mirror** (2-fold) and **Kaleidoscope** (radial) for instant symmetry art. |
+| ↶ **Undo / Redo** | Full stroke history (up to 20 steps) — never fear a wrong move. Works with `Z` / `X` keys too. |
+| 🖌️ **10 brushes** | Comet, Ribbon, Sparkler, Neon Pen, **Ink** (speed = pressure), **Chroma** (rainbow split), plus **Mirror**, **Trine**, **Kaleidoscope** & **Bloom** for instant symmetry art. |
+| 📏 **Brush size** | A size slider (55–180%) — plus `↑`/`↓` keys — for fine detail or bold sweeps. |
 | 🎨 **6 palettes** | Aurora · Ember · Ice · Neon · Gold · Rose. |
 | 🎓 **Learn to draw** | Animated stroke-order coach + 12 rotating technique tips + targeted post-photo feedback. |
+| ⭐ **Progress tracking** | Best score and a lifetime-stars total, saved locally. |
 | 🌌 **Free Studio** | A no-pressure mode to just make art. |
 | 💾 **Save Photo** | Export your creation as a PNG to keep or share. |
+| ⌨️ **Keyboard shortcuts** | `Z` undo · `X` redo · `Space` develop · `↑`/`↓` brush size · `C` clear (Studio). |
 | 📱 **Mobile-first** | One-thumb controls, safe-area aware, works offline. |
 | 🪶 **Zero dependencies** | One HTML file. No build, no server, no tracking. |
 
@@ -100,6 +104,10 @@ Live at **https://DLinacre.github.io/afterglow/**.
 
 ## 🗺️ Roadmap
 
+- [x] Undo / redo with stroke history
+- [x] Expanded brush set (10) + brush-size control
+- [x] Lifetime progress tracking (stars)
+- [x] Keyboard shortcuts
 - [ ] Ambient audio that responds to painting speed
 - [ ] "No-go" dark-zone tension mode (scoring mask already exists)
 - [ ] Daily challenge (seed the RNG with the date)

@@ -51,7 +51,21 @@
   button:active { transform:scale(.95); }
   button.primary { background:linear-gradient(135deg,#3b6dff,#8f5bff); border-color:transparent;
     box-shadow:0 6px 24px rgba(90,110,255,.35); }
+  button.compact { padding:13px 15px; font-size:18px; line-height:1; min-width:48px; }
+  button:disabled { opacity:.35; cursor:default; }
+  button:disabled:active { transform:none; }
   .hidden { display:none !important; }
+
+  /* range slider (brush size) */
+  .rangerow { display:flex; align-items:center; gap:12px; padding:8px 0 2px; }
+  .rangerow .rv { font-size:13px; opacity:.7; min-width:74px; text-align:right; font-variant-numeric:tabular-nums; }
+  input[type=range] { -webkit-appearance:none; appearance:none; flex:1; height:6px; border-radius:6px;
+    background:rgba(120,140,200,.28); outline:none; pointer-events:auto; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; appearance:none; width:22px; height:22px;
+    border-radius:50%; background:linear-gradient(135deg,#7fb2ff,#c79bff); cursor:pointer;
+    box-shadow:0 2px 10px rgba(120,120,255,.5); }
+  input[type=range]::-moz-range-thumb { width:22px; height:22px; border:none; border-radius:50%;
+    background:linear-gradient(135deg,#7fb2ff,#c79bff); cursor:pointer; }
 
   /* ---------- overlays ---------- */
   .overlay { position:fixed; inset:0; z-index:20; display:flex; align-items:center; justify-content:center;
@@ -134,10 +148,14 @@
 
 <!-- bottom toolbars (swap by mode) -->
 <div class="toolbar" id="barGuided">
+  <button class="compact" id="btnUndoG" title="Undo (Z)">↶</button>
+  <button class="compact" id="btnRedoG" title="Redo (X)">↷</button>
   <button id="btnRetake">Retake</button>
   <button class="primary" id="btnDevelop">Develop&nbsp;Photo</button>
 </div>
 <div class="toolbar hidden" id="barFree">
+  <button class="compact" id="btnUndoF" title="Undo (Z)">↶</button>
+  <button class="compact" id="btnRedoF" title="Redo (X)">↷</button>
   <button id="btnClear">Clear</button>
   <button class="primary" id="btnSaveFree">Save&nbsp;Photo</button>
   <button id="btnExitFree">Exit</button>
@@ -152,7 +170,7 @@
     <ul class="how">
       <li><b>Hold &amp; drag</b> anywhere to open the shutter and paint.</li>
       <li>Fill the faint, pulsing <b>guide shape</b> (a coach shows you the stroke order).</li>
-      <li>Try the <b>Mirror</b> &amp; <b>Kaleidoscope</b> brushes for instant symmetry art.</li>
+      <li>Made a mistake? <b>Undo</b> ↶ any stroke — 10 brushes await in ⚙.</li>
       <li>Tap <b>Develop</b> to score. Photos are endless — each one is new.</li>
     </ul>
     <div class="btnrow">
@@ -182,11 +200,15 @@
   <div class="card">
     <h2>Brush</h2>
     <div class="chips" id="brushChips"></div>
+    <h2>Brush size</h2>
+    <div class="rangerow"><input type="range" id="szRange" min="55" max="180" value="100"><span class="rv" id="szVal">100%</span></div>
     <h2>Palette</h2>
     <div class="chips" id="paletteChips"></div>
     <h2>Coaching</h2>
     <div class="toggle"><span>Show guide shape</span><div class="switch on" id="swGuide"></div></div>
     <div class="toggle"><span>Trace coach (learn stroke order)</span><div class="switch on" id="swCoach"></div></div>
+    <h2>Progress</h2>
+    <div class="toggle" style="border:none"><span>Lifetime stars earned</span><span id="totalStars" style="color:#ffd67a;font-weight:700">0 ★</span></div>
     <div class="panelclose"><button class="primary" id="btnCloseSettings">Done</button></div>
   </div>
 </div>
@@ -321,6 +343,60 @@
           return out;
         }
       })},
+    { id: 'neon', name: 'Neon Pen', cn: 'fine bright line', connected: true, make: () => ({
+        reset() {},
+        pens(s) { return [{ x: s.x, y: s.y, size: s.dim * 0.03, hueDeg: paletteHue(s.pal, s.phase) }]; }
+      })},
+    { id: 'ink', name: 'Ink', cn: 'pressure by speed', connected: true, make: () => {
+        let w = 0.09;
+        return {
+          reset() { w = 0.09; },
+          pens(s) {
+            // slow = thick, fast = thin (like a real brush pen). s.spd is 0..1
+            const target = 0.13 - Math.min(1, s.spd) * 0.10;
+            w += (target - w) * 0.25;
+            return [{ x: s.x, y: s.y, size: s.dim * w, hueDeg: paletteHue(s.pal, s.phase) }];
+          }
+        };
+      }},
+    { id: 'chroma', name: 'Chroma', cn: 'rainbow split', connected: true, make: () => {
+        let a = 0;
+        return {
+          reset() { a = 0; },
+          pens(s) {
+            a += 2.0 * s.dt * 0.004; const o = s.dim * 0.025;
+            return [
+              { x: s.x + Math.cos(a) * o,        y: s.y + Math.sin(a) * o,        size: s.dim * 0.05, hueDeg: 0   + s.phase * 360 },
+              { x: s.x + Math.cos(a + 2.09) * o, y: s.y + Math.sin(a + 2.09) * o, size: s.dim * 0.05, hueDeg: 120 + s.phase * 360 },
+              { x: s.x + Math.cos(a + 4.19) * o, y: s.y + Math.sin(a + 4.19) * o, size: s.dim * 0.05, hueDeg: 240 + s.phase * 360 },
+            ];
+          }
+        };
+      }},
+    { id: 'trine', name: 'Trine', cn: '3-fold symmetry', connected: true, make: () => ({
+        reset() {},
+        pens(s) {
+          const cx = W / 2, cy = H / 2, dx = s.x - cx, dy = s.y - cy, out = [];
+          for (let k = 0; k < 3; k++) { const rot = k / 3 * 6.2832, c = Math.cos(rot), sn = Math.sin(rot);
+            out.push({ x: cx + dx * c - dy * sn, y: cy + dx * sn + dy * c, size: s.dim * 0.06,
+                       hueDeg: paletteHue(s.pal, s.phase + k / 3) }); }
+          return out;
+        }
+      })},
+    { id: 'bloom', name: 'Bloom', cn: 'petals of light', connected: true, make: () => {
+        const P = 5, ang = Array.from({ length: P }, (_, i) => i / P * 6.2832);
+        return {
+          reset() {},
+          pens(s) {
+            const out = [{ x: s.x, y: s.y, size: s.dim * 0.05, hueDeg: paletteHue(s.pal, s.phase) }];
+            const r = s.dim * 0.05;
+            for (let i = 0; i < P; i++) { ang[i] += 1.4 * s.dt * 0.004;
+              out.push({ x: s.x + Math.cos(ang[i]) * r, y: s.y + Math.sin(ang[i]) * r, size: s.dim * 0.035,
+                         hueDeg: paletteHue(s.pal, s.phase + i / P) }); }
+            return out;
+          }
+        };
+      }},
   ];
 
   /* ═══════════════════════════ SHAPES ═══════════════════════════════════ */
@@ -410,18 +486,20 @@
   /* ═══════════════════════════ STATE ════════════════════════════════════ */
   const S = {
     mode: 'menu',            // 'menu' | 'guided' | 'free'
-    level: 1, best: 0,
+    level: 1, best: 0, totalStars: 0,
     target: null,
     brush: null, brushId: 'comet',
-    palIdx: 0,
+    palIdx: 0, sizeMul: 1,
     showGuide: true, coachOn: true, coachPlaying: false,
     painting: false, hasPainted: false, hasPaintedThisLevel: false,
     phase: 0,
     prevPens: null,
+    history: [], future: [],   // undo/redo snapshots (ImageData)
   };
   S.best = +(localStorage.getItem('afterglow_best') || 0);
+  S.totalStars = +(localStorage.getItem('afterglow_stars') || 0);
   document.getElementById('hBest').textContent = S.best;
-  const pointer = { x: 0, y: 0, down: false };
+  const pointer = { x: 0, y: 0, px: 0, py: 0, down: false, spd: 0 };
 
   function setBrush(id){ S.brushId = id; const def = BRUSHES.find(b => b.id === id); S.brush = def.make(); S.brush.reset(); S.brush.def = def; S.prevPens = null; renderChips(); }
   setBrush('comet');
@@ -439,6 +517,7 @@
     makeStars();
     if (S.target) buildTargetMask();
     clearPaint();
+    if (S.history) resetHistory();   // old snapshots are the wrong size now
   }
   window.addEventListener('resize', resize);
   function drawBg(t){
@@ -451,6 +530,41 @@
     bgx.globalAlpha=1;
   }
   function clearPaint(){ px.clearRect(0,0,W,H); S.hasPainted=false; }
+
+  /* ═══════════════════════ UNDO / REDO ══════════════════════════════════ */
+  // Snapshot-based: we save the paint canvas before each stroke begins.
+  const HISTORY_MAX = 20;
+  function pushHistory(){
+    try {
+      S.history.push(px.getImageData(0,0,Math.floor(W*DPR),Math.floor(H*DPR)));
+      if (S.history.length > HISTORY_MAX) S.history.shift();
+      S.future.length = 0;   // a new stroke invalidates the redo chain
+    } catch(e){ /* ignore (e.g. tainted canvas) */ }
+    updateUndoButtons();
+  }
+  function resetHistory(){ S.history.length=0; S.future.length=0; updateUndoButtons(); }
+  function putSnapshot(img){ px.putImageData(img,0,0); S.hasPainted = hasAnyLight(); }
+  function undo(){
+    if (!S.history.length){ toast('Nothing to undo'); return; }
+    S.future.push(px.getImageData(0,0,Math.floor(W*DPR),Math.floor(H*DPR)));
+    putSnapshot(S.history.pop()); updateUndoButtons(); toast('Undo');
+  }
+  function redo(){
+    if (!S.future.length){ toast('Nothing to redo'); return; }
+    S.history.push(px.getImageData(0,0,Math.floor(W*DPR),Math.floor(H*DPR)));
+    putSnapshot(S.future.pop()); updateUndoButtons(); toast('Redo');
+  }
+  function hasAnyLight(){
+    // cheap check: sample a coarse grid for any lit pixel
+    const bw=Math.floor(W*DPR), bh=Math.floor(H*DPR);
+    const d=px.getImageData(0,0,bw,bh).data, step=(bw*4)*8;
+    for (let i=0;i<d.length;i+=step*2){ if (d[i]+d[i+1]+d[i+2] > 30) return true; } return false;
+  }
+  function updateUndoButtons(){
+    const canU=S.history.length>0, canR=S.future.length>0;
+    for (const id of ['btnUndoG','btnUndoF']){ const b=document.getElementById(id); if(b) b.disabled=!canU; }
+    for (const id of ['btnRedoG','btnRedoF']){ const b=document.getElementById(id); if(b) b.disabled=!canR; }
+  }
 
   /* ═══════════════════════ TARGET / MASK ════════════════════════════════ */
   function buildTargetMask(){
@@ -470,7 +584,7 @@
 
   function loadLevel(n){
     S.target = makeShapeForLevel(n); buildTargetMask(); clearPaint();
-    S.hasPaintedThisLevel=false; S.brush.reset(); S.prevPens=null;
+    S.hasPaintedThisLevel=false; S.brush.reset(); S.prevPens=null; resetHistory();
     S.coachPlaying = S.coachOn && (n <= CONFIG.autoCoachLevels);
     document.getElementById('hMode').textContent = 'Photo ' + n;
     document.getElementById('hTarget').textContent = S.target.name;
@@ -523,9 +637,14 @@
 
     if (S.mode !== 'menu'){
       S.phase += dt * 0.0006;
+      // pointer speed (normalized) for pressure-style brushes
+      const inst = Math.hypot(pointer.x-pointer.px, pointer.y-pointer.py) / Math.max(1,DIM) / (dt/16.67+0.001);
+      pointer.spd += (Math.min(1,inst*3) - pointer.spd) * 0.3;
+      pointer.px = pointer.x; pointer.py = pointer.y;
       if (S.painting && pointer.down && S.brush){
         px.globalCompositeOperation='lighter';
-        const pens = S.brush.pens({ x:pointer.x, y:pointer.y, dt, t:now, phase:S.phase, pal:PALETTES[S.palIdx], dim:DIM });
+        const pens = S.brush.pens({ x:pointer.x, y:pointer.y, dt, t:now, phase:S.phase, pal:PALETTES[S.palIdx], dim:DIM, spd:pointer.spd });
+        for (const p of pens) p.size *= S.sizeMul;
         if (S.brush.def.connected && S.prevPens && S.prevPens.length===pens.length){
           for (let i=0;i<pens.length;i++) stampLine(S.prevPens[i].x,S.prevPens[i].y,pens[i].x,pens[i].y,pens[i].size,pens[i].hueDeg);
         } else { for (const p of pens) stamp(p.x,p.y,p.size,p.hueDeg); }
@@ -573,6 +692,8 @@
     document.getElementById('rMsg').textContent = msg;
     document.getElementById('rFeedback').innerHTML = fb;
     if (score > S.best){ S.best = score; localStorage.setItem('afterglow_best', S.best); document.getElementById('hBest').textContent = S.best; }
+    if (stars > 0){ S.totalStars += stars; localStorage.setItem('afterglow_stars', S.totalStars);
+      const ts=document.getElementById('totalStars'); if(ts) ts.textContent = S.totalStars + ' ★'; }
     document.getElementById('resultScreen').classList.remove('hidden');
   }
 
@@ -604,7 +725,10 @@
 
   /* ═══════════════════════════ INPUT ════════════════════════════════════ */
   function pos(e){ const t=e.touches?e.touches[0]:e; pointer.x=t.clientX; pointer.y=t.clientY; }
-  function down(e){ if(S.mode==='menu'||S.mode==='result')return; e.preventDefault(); pos(e); pointer.down=true; S.painting=true;
+  function down(e){ if(S.mode==='menu'||S.mode==='result')return; e.preventDefault(); pos(e);
+    pointer.px=pointer.x; pointer.py=pointer.y; pointer.spd=0;
+    pushHistory();                      // save state so this stroke can be undone
+    pointer.down=true; S.painting=true;
     S.prevPens=null; if(S.brush)S.brush.reset(); S.coachPlaying=false; document.getElementById('hint').classList.remove('show'); }
   function move(e){ if(!pointer.down)return; e.preventDefault(); pos(e); }
   function up(){ pointer.down=false; S.painting=false; S.prevPens=null; }
@@ -621,16 +745,16 @@
     loadLevel(S.level); flashHint('Follow the golden coach','then hold & drag to paint the light'); };
   document.getElementById('btnFree').onclick = ()=>{ hide('startScreen'); enterFree(); };
   document.getElementById('btnDevelop').onclick = developPhoto;
-  document.getElementById('btnRetake').onclick = ()=>{ if(S.mode==='guided'){ clearPaint(); S.brush.reset(); flashHint('Fresh frame','the shutter is reset'); } };
+  document.getElementById('btnRetake').onclick = ()=>{ if(S.mode==='guided'){ clearPaint(); S.brush.reset(); resetHistory(); flashHint('Fresh frame','the shutter is reset'); } };
   document.getElementById('btnNext').onclick = ()=>{ hide('resultScreen'); S.mode='guided'; S.level++; loadLevel(S.level); };
   document.getElementById('btnRedo').onclick = ()=>{ hide('resultScreen'); S.mode='guided'; loadLevel(S.level); };
   document.getElementById('btnSaveResult').onclick = savePhoto;
 
   function enterFree(){ S.mode='free'; document.getElementById('barGuided').classList.add('hidden');
-    document.getElementById('barFree').classList.remove('hidden'); clearPaint(); S.brush.reset();
+    document.getElementById('barFree').classList.remove('hidden'); clearPaint(); S.brush.reset(); resetHistory();
     document.getElementById('hMode').textContent='Free Studio'; document.getElementById('hTarget').textContent='make art ✦';
     flashHint('Free Studio','pick a brush & palette in ⚙, then paint'); }
-  document.getElementById('btnClear').onclick = ()=>{ clearPaint(); S.brush.reset(); toast('Cleared'); };
+  document.getElementById('btnClear').onclick = ()=>{ pushHistory(); clearPaint(); S.brush.reset(); toast('Cleared'); };
   document.getElementById('btnSaveFree').onclick = savePhoto;
   document.getElementById('btnExitFree').onclick = ()=>{ S.mode='menu'; document.getElementById('barFree').classList.add('hidden'); show('startScreen'); };
 
@@ -642,9 +766,41 @@
   bindSwitch('swGuide','showGuide');
   bindSwitch('swCoach','coachOn', ()=>{ S.coachPlaying = S.coachOn && S.mode==='guided'; });
 
+  // undo / redo buttons (both toolbars)
+  document.getElementById('btnUndoG').onclick = undo;
+  document.getElementById('btnUndoF').onclick = undo;
+  document.getElementById('btnRedoG').onclick = redo;
+  document.getElementById('btnRedoF').onclick = redo;
+
+  // brush size slider
+  const szRange=document.getElementById('szRange'), szVal=document.getElementById('szVal');
+  szRange.value = Math.round((+(localStorage.getItem('afterglow_size')||100)));
+  function applySize(){ S.sizeMul = szRange.value/100; szVal.textContent = szRange.value+'%';
+    localStorage.setItem('afterglow_size', szRange.value); }
+  szRange.addEventListener('input', applySize); applySize();
+
+  // total stars display
+  function refreshStars(){ document.getElementById('totalStars').textContent = S.totalStars + ' ★'; }
+  refreshStars();
+
+  // keyboard shortcuts (desktop): Z undo, X redo, space develop, arrows for brush size
+  window.addEventListener('keydown', (e)=>{
+    if (S.mode==='menu') return;
+    const k=e.key.toLowerCase();
+    if (k==='z'){ undo(); e.preventDefault(); }
+    else if (k==='x'){ redo(); e.preventDefault(); }
+    else if (k===' ' && S.mode==='guided'){ developPhoto(); e.preventDefault(); }
+    else if (k==='c' && S.mode==='free'){ pushHistory(); clearPaint(); toast('Cleared'); }
+    else if (k==='arrowup' || k==='arrowdown'){
+      szRange.value = Math.max(55, Math.min(180, +szRange.value + (k==='arrowup'?5:-5)));
+      applySize(); e.preventDefault();
+    }
+  });
+
   /* ═══════════════════════════ BOOT ═════════════════════════════════════ */
   resize();
   renderChips();
+  updateUndoButtons();
   requestAnimationFrame(frame);
 })();
 </script>

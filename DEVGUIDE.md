@@ -43,8 +43,11 @@ A brush is `{ id, name, cn, connected, make }`.
 - `pens(s)` returns an array of `{x, y, size, hueDeg}` — one per "pen".
   **Keep the array length stable while the finger is down** if `connected`, so lines
   join correctly.
-- `s` gives you: `{x, y, dt, t, phase, pal, dim}` where `x,y` = finger position,
-  `dim = min(width,height)`, `pal` = current palette (use `paletteHue(pal, phase)`).
+- `s` gives you: `{x, y, dt, t, phase, pal, dim, spd}` where `x,y` = finger position,
+  `dim = min(width,height)`, `pal` = current palette (use `paletteHue(pal, phase)`),
+  and `spd` = smoothed pointer speed 0..1 (use it for pressure-style width, see the
+  **Ink** brush). Final pen sizes are automatically multiplied by the user's brush-size
+  setting, so just return your natural sizes.
 
 Example — a two-pen "wings" brush:
 ```js
@@ -103,6 +106,15 @@ anywhere via `pickTip()`.
 - **Guided** (`Start Shooting`): endless photos, guide + coach + scoring.
 - **Free Studio**: no target — pure art. Pick brush/palette in ⚙, `Save Photo`
   exports a PNG (background + light trails, watermarked).
+
+## 7b. Undo / Redo
+
+The paint layer uses **snapshot-based history**. Before each stroke begins (`down()`),
+`pushHistory()` saves the current paint canvas as `ImageData`. `undo()` / `redo()` swap
+between the `S.history` and `S.future` stacks (max 20 steps). Any action that changes the
+canvas non-interactively (Clear) also calls `pushHistory()` first. History is reset on
+level load and on resize (snapshots would be the wrong pixel size otherwise). If you add
+a new canvas-mutating action, call `pushHistory()` before it and you're done.
 
 ## 8. Ideas parked for later
 - Ambient audio that responds to painting speed.
