@@ -116,6 +116,24 @@ canvas non-interactively (Clear) also calls `pushHistory()` first. History is re
 level load and on resize (snapshots would be the wrong pixel size otherwise). If you add
 a new canvas-mutating action, call `pushHistory()` before it and you're done.
 
+## 7c. Audio engine
+
+All sound is **synthesised with the Web Audio API** — no files. The `AUDIO` module
+(near the top of the script) is created lazily on the first pointer-down (browsers
+require a user gesture). It exposes:
+- `AUDIO.paintTick(speed, y, now)` — call while painting; maps pointer speed → chime
+  density/brightness and vertical position → pitch on a pentatonic scale.
+- `AUDIO.chord('win'|'next'|'ok')` — short stingers, fired from `showResult()`.
+- `AUDIO.setEnabled(bool)` — respected by the Sound toggle (persisted in localStorage).
+
+To add new sounds, add a method to the module and call it from the relevant event.
+
+## 7d. Daily Challenge
+
+`makeDailyShape()` seeds the PRNG with `todaySeed()` (YYYYMMDD), so every player gets the
+same shape for the whole day. `startDaily()` / `loadDaily()` mirror the guided flow but
+never advance a level. Great seam for a future online leaderboard.
+
 ## 8. Ideas parked for later
 - Ambient audio that responds to painting speed.
 - "No-go" dark zones for a tension mode (mask already exists — just penalise entry live).

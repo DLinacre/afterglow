@@ -51,14 +51,18 @@ deep to master — and it teaches you to draw better as you play.
 | | |
 |---|---|
 | ♾️ **Endless play** | Deterministic procedural shapes — photo #N is always the same, so it's fair *and* infinite. |
+| 📅 **Daily Challenge** | One shape seeded by the date — the same for everyone, all day. |
+| 🔊 **Generative audio** | A synthesised ambient pad plus chimes that follow your painting speed & height. No audio files — it's all live. |
+| 🔥 **Streaks** | Chain photos that score 65%+ for a running streak counter. |
 | ↶ **Undo / Redo** | Full stroke history (up to 20 steps) — never fear a wrong move. Works with `Z` / `X` keys too. |
 | 🖌️ **10 brushes** | Comet, Ribbon, Sparkler, Neon Pen, **Ink** (speed = pressure), **Chroma** (rainbow split), plus **Mirror**, **Trine**, **Kaleidoscope** & **Bloom** for instant symmetry art. |
 | 📏 **Brush size** | A size slider (55–180%) — plus `↑`/`↓` keys — for fine detail or bold sweeps. |
-| 🎨 **6 palettes** | Aurora · Ember · Ice · Neon · Gold · Rose. |
+| 🎨 **12 palettes** | Aurora · Ember · Ice · Neon · Gold · Rose · Sunset · Lagoon · Candy · Toxic · Mono · Prism. |
+| 🖼️ **17 shape families** | Roses, Lissajous, spirographs, star-polygons, butterflies, superformula blooms, constellations, waves & more. |
 | 🎓 **Learn to draw** | Animated stroke-order coach + 12 rotating technique tips + targeted post-photo feedback. |
 | ⭐ **Progress tracking** | Best score and a lifetime-stars total, saved locally. |
 | 🌌 **Free Studio** | A no-pressure mode to just make art. |
-| 💾 **Save Photo** | Export your creation as a PNG to keep or share. |
+| 💾 **Save & Share** | Export a PNG, or share straight to other apps via the Web Share API. |
 | ⌨️ **Keyboard shortcuts** | `Z` undo · `X` redo · `Space` develop · `↑`/`↓` brush size · `C` clear (Studio). |
 | 📱 **Mobile-first** | One-thumb controls, safe-area aware, works offline. |
 | 🪶 **Zero dependencies** | One HTML file. No build, no server, no tracking. |
@@ -106,13 +110,14 @@ Live at **https://DLinacre.github.io/afterglow/**.
 
 - [x] Undo / redo with stroke history
 - [x] Expanded brush set (10) + brush-size control
-- [x] Lifetime progress tracking (stars)
+- [x] Lifetime progress tracking (stars) + streaks
 - [x] Keyboard shortcuts
-- [ ] Ambient audio that responds to painting speed
+- [x] Ambient audio that responds to painting speed
+- [x] Daily challenge (seed the RNG with the date)
+- [x] Native share sheet via the Web Share API
 - [ ] "No-go" dark-zone tension mode (scoring mask already exists)
-- [ ] Daily challenge (seed the RNG with the date)
-- [ ] Native share sheet via the Web Share API
 - [ ] Unlockable brushes & palettes tied to star totals
+- [ ] Online leaderboard for the daily challenge
 
 ## 📄 License
 

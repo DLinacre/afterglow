@@ -127,6 +127,11 @@
     z-index:8; background:rgba(20,26,44,.9); border:1px solid rgba(150,180,255,.2); border-radius:12px;
     padding:9px 15px; font-size:13.5px; opacity:0; transition:opacity .3s, transform .3s; pointer-events:none; }
   .toast.show { opacity:1; transform:translate(-50%,-6px); }
+
+  /* streak pill — floats just under the HUD */
+  .streakpill { position:fixed; left:50%; top:calc(70px + env(safe-area-inset-top)); transform:translateX(-50%);
+    z-index:6; font-size:12.5px; font-weight:600; color:#ffd9a0; padding:6px 12px;
+    background:rgba(40,26,12,.6); border-color:rgba(255,180,90,.28); }
 </style>
 </head>
 <body>
@@ -142,6 +147,7 @@
   <div class="pill target" style="text-align:center"><div class="lbl" id="hMode">Photo 1</div><div class="val" id="hTarget">—</div></div>
   <div class="pill" style="text-align:right"><div class="lbl">Best</div><div class="val" id="hBest">0</div></div>
 </div>
+<div class="pill streakpill hidden" id="streakPill"><span id="streakVal">0</span>🔥 streak</div>
 
 <div class="hint" id="hint"><div class="t1"></div><div class="t2"></div></div>
 <div class="toast" id="toast"></div>
@@ -175,6 +181,7 @@
     </ul>
     <div class="btnrow">
       <button class="primary" id="btnStart">Start Shooting</button>
+      <button id="btnDaily">Daily Challenge</button>
       <button id="btnFree">Free Studio</button>
     </div>
   </div>
@@ -189,7 +196,8 @@
     <div class="feedback" id="rFeedback"></div>
     <div class="btnrow">
       <button id="btnRedo">Reshoot</button>
-      <button id="btnSaveResult">Save&nbsp;Photo</button>
+      <button id="btnSaveResult">Save</button>
+      <button id="btnShareResult">Share</button>
       <button class="primary" id="btnNext">Next Photo</button>
     </div>
   </div>
@@ -207,6 +215,8 @@
     <h2>Coaching</h2>
     <div class="toggle"><span>Show guide shape</span><div class="switch on" id="swGuide"></div></div>
     <div class="toggle"><span>Trace coach (learn stroke order)</span><div class="switch on" id="swCoach"></div></div>
+    <h2>Sound</h2>
+    <div class="toggle"><span>Ambient music &amp; painting chimes</span><div class="switch on" id="swSound"></div></div>
     <h2>Progress</h2>
     <div class="toggle" style="border:none"><span>Lifetime stars earned</span><span id="totalStars" style="color:#ffd67a;font-weight:700">0 ★</span></div>
     <div class="panelclose"><button class="primary" id="btnCloseSettings">Done</button></div>
@@ -258,6 +268,63 @@
     for (let i = 0; i <= steps; i++) { const t = i / steps; stamp(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, size, hueDeg); }
   }
 
+  /* ═══════════════════════════ AUDIO ════════════════════════════════════ */
+  // Generative ambient pad + a soft "chime" that follows your painting speed.
+  // Everything is synthesised (no files). Lazily created on first user gesture.
+  const AUDIO = (() => {
+    let ctx=null, master=null, padGain=null, ready=false, enabled=true;
+    const PENT = [0,3,5,7,10,12,15];          // pentatonic scale (semitones)
+    const ROOT = 220;                          // A3
+    const midi = s => ROOT * Math.pow(2, s/12);
+    let padVoices=[], lastChime=0;
+    function init(){
+      if (ctx) return;
+      try {
+        const AC = window.AudioContext || window.webkitAudioContext; if(!AC) return;
+        ctx = new AC();
+        master = ctx.createGain(); master.gain.value = 0.0; master.connect(ctx.destination);
+        // gentle reverb-ish: a lowpass on the master bus
+        const lp = ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=2600;
+        master.disconnect(); master.connect(lp); lp.connect(ctx.destination);
+        padGain = ctx.createGain(); padGain.gain.value = 0.10; padGain.connect(master);
+        // three detuned sine "pad" voices forming a soft chord
+        [0,7,12].forEach((semi,i)=>{
+          const o=ctx.createOscillator(); o.type='sine'; o.frequency.value=midi(semi-12);
+          const g=ctx.createGain(); g.gain.value = i===0?0.5:0.28;
+          const lfo=ctx.createOscillator(); lfo.type='sine'; lfo.frequency.value=0.05+i*0.03;
+          const lg=ctx.createGain(); lg.gain.value=1.5; lfo.connect(lg); lg.connect(o.detune);
+          o.connect(g); g.connect(padGain); o.start(); lfo.start(); padVoices.push({o,g});
+        });
+        ready=true;
+      } catch(e){ /* audio unavailable */ }
+    }
+    function resume(){ if(ctx && ctx.state==='suspended') ctx.resume(); }
+    function setEnabled(on){ enabled=on; if(master) master.gain.setTargetAtTime(on?0.9:0.0, ctx.currentTime, 0.4); }
+    // called while painting; speed 0..1 and y 0..1 shape the chime
+    function paintTick(speed, y, now){
+      if(!ready||!enabled||!ctx) return;
+      if (now - lastChime < 90 - speed*55) return;         // faster painting = denser chimes
+      lastChime = now;
+      const deg = PENT[Math.floor((1-y)*(PENT.length-1)+0.5)] + 12*(speed>0.6?1:0);
+      const f = midi(deg);
+      const o=ctx.createOscillator(); o.type = speed>0.5?'triangle':'sine'; o.frequency.value=f;
+      const g=ctx.createGain(); const t=ctx.currentTime;
+      const vol = 0.05 + speed*0.10;
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t+0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, t+0.6);
+      o.connect(g); g.connect(master); o.start(t); o.stop(t+0.65);
+    }
+    function chord(kind){ // small feedback stingers
+      if(!ready||!enabled||!ctx) return; const t=ctx.currentTime;
+      const set = kind==='win'?[0,4,7,12]:kind==='next'?[0,5,7]:[0,3,7];
+      set.forEach((semi,i)=>{ const o=ctx.createOscillator(); o.type='sine'; o.frequency.value=midi(semi);
+        const g=ctx.createGain(); g.gain.setValueAtTime(0,t+i*0.06);
+        g.gain.linearRampToValueAtTime(0.10,t+i*0.06+0.02); g.gain.exponentialRampToValueAtTime(0.0001,t+i*0.06+0.9);
+        o.connect(g); g.connect(master); o.start(t+i*0.06); o.stop(t+i*0.06+0.95); });
+    }
+    return { init, resume, setEnabled, paintTick, chord, get on(){return enabled;}, get ready(){return ready;} };
+  })();
+
   /* ═══════════════════════════ PALETTES ═════════════════════════════════ */
   // hue(phase) → degrees. cycle=true sweeps the whole range; else oscillates within it.
   const PALETTES = [
@@ -267,6 +334,12 @@
     { name: 'Neon',   lo: 0,   hi: 360, speed: 0.35, cycle: true },
     { name: 'Gold',   lo: 40,  hi: 56,  speed: 1.0, cycle: false },
     { name: 'Rose',   lo: 300, hi: 350, speed: 0.9, cycle: false },
+    { name: 'Sunset', lo: 350, hi: 40,  speed: 1.0, cycle: false },
+    { name: 'Lagoon', lo: 150, hi: 200, speed: 0.85, cycle: false },
+    { name: 'Candy',  lo: 280, hi: 340, speed: 1.2, cycle: false },
+    { name: 'Toxic',  lo: 80,  hi: 160, speed: 1.0, cycle: false },
+    { name: 'Mono',   lo: 210, hi: 214, speed: 0.6, cycle: false },
+    { name: 'Prism',  lo: 0,   hi: 360, speed: 0.7, cycle: true },
   ];
   function paletteHue(pal, phase) {
     if (pal.cycle) return pal.lo + ((phase * pal.speed) % 1) * (pal.hi - pal.lo);
@@ -452,6 +525,21 @@
     (rng) => { const m=rint(rng,3,8), n1=rng()*2+0.4, n2=rng()*2+0.4, n3=rng()*2+0.4; const p=[];
         for(let t=0;t<=6.34+0.05;t+=0.02){ const a=Math.pow(Math.abs(Math.cos(m*t/4)),n2), b=Math.pow(Math.abs(Math.sin(m*t/4)),n3);
           const r=Math.pow(a+b,-1/n1); p.push({x:Math.cos(t)*r,y:Math.sin(t)*r}); } return norm({name:'Bloom',strokes:[p]}); },
+    // Epicycloid / flower-of-life style loops
+    (rng) => { const k=rint(rng,3,7); const p=[]; for(let t=0;t<=6.34*k+0.05;t+=0.03){
+        const r=0.30+0.12*Math.cos(k*t); p.push({x:Math.cos(t)*r,y:Math.sin(t)*r}); } return norm({name:'Epicycle',strokes:[p]}); },
+    // Butterfly curve
+    (rng) => { const p=[]; for(let t=0;t<=12.57+0.05;t+=0.03){ const e=Math.exp(Math.cos(t))-2*Math.cos(4*t)-Math.pow(Math.sin(t/12),5);
+        p.push({x:Math.sin(t)*e, y:-Math.cos(t)*e}); } return norm({name:'Butterfly',strokes:[p]}); },
+    // Heart-gear (rose with offset)
+    (rng) => { const k=rint(rng,4,9); const p=[]; for(let t=0;t<=6.34+0.05;t+=0.02){
+        const r=0.22+0.10*Math.abs(Math.sin(k*t/2)); p.push({x:Math.cos(t)*r,y:Math.sin(t)*r}); } return norm({name:'Gear',strokes:[p]}); },
+    // Polygon (clean n-gon)
+    (rng) => { const n=rint(rng,3,8); const p=[]; for(let i=0;i<=n;i++){ const a=-Math.PI/2+i/n*6.2832;
+        p.push({x:Math.cos(a)*0.42,y:Math.sin(a)*0.42}); } return { name:`${n}-gon`, strokes:[p] }; },
+    // Wave ribbon (open stroke)
+    (rng) => { const f=rint(rng,2,5), amp=0.18+rng()*0.14; const p=[]; for(let x=-0.42;x<=0.42;x+=0.02)
+        p.push({x, y:Math.sin(x*f*3.14159*2)*amp}); return { name:'Wave', strokes:[p] }; },
   ];
   function gcd(a,b){ while(b){ [a,b]=[b,a%b]; } return a; }
   function constToObj(name,nodes,edges){ return { name, strokes: edges.map(([a,b]) => [{x:nodes[a][0],y:nodes[a][1]},{x:nodes[b][0],y:nodes[b][1]}]) }; }
@@ -464,6 +552,14 @@
     const rng = mulberry32(n * 2654435761);
     const gen = PROC_GENERATORS[Math.floor(rng() * PROC_GENERATORS.length)];
     return gen(rng);
+  }
+  // Daily challenge: a fixed shape seeded by today's date (same for everyone, all day).
+  function todaySeed(){ const d=new Date(); return d.getFullYear()*10000 + (d.getMonth()+1)*100 + d.getDate(); }
+  function todayLabel(){ return new Date().toLocaleDateString(undefined,{month:'short',day:'numeric'}); }
+  function makeDailyShape(){
+    const seed = todaySeed(); const rng = mulberry32(seed ^ 0x9e3779b9);
+    const gen = PROC_GENERATORS[Math.floor(rng() * PROC_GENERATORS.length)];
+    const obj = gen(rng); obj.name = 'Daily · ' + obj.name; return obj;
   }
 
   /* ═══════════════════════════ TIPS ═════════════════════════════════════ */
@@ -485,12 +581,12 @@
 
   /* ═══════════════════════════ STATE ════════════════════════════════════ */
   const S = {
-    mode: 'menu',            // 'menu' | 'guided' | 'free'
-    level: 1, best: 0, totalStars: 0,
-    target: null,
+    mode: 'menu',            // 'menu' | 'guided' | 'free' | 'daily'
+    level: 1, best: 0, totalStars: 0, streak: 0,
+    target: null, daily: false,
     brush: null, brushId: 'comet',
     palIdx: 0, sizeMul: 1,
-    showGuide: true, coachOn: true, coachPlaying: false,
+    showGuide: true, coachOn: true, coachPlaying: false, soundOn: true,
     painting: false, hasPainted: false, hasPaintedThisLevel: false,
     phase: 0,
     prevPens: null,
@@ -498,6 +594,7 @@
   };
   S.best = +(localStorage.getItem('afterglow_best') || 0);
   S.totalStars = +(localStorage.getItem('afterglow_stars') || 0);
+  S.soundOn = localStorage.getItem('afterglow_sound') !== '0';
   document.getElementById('hBest').textContent = S.best;
   const pointer = { x: 0, y: 0, px: 0, py: 0, down: false, spd: 0 };
 
@@ -650,6 +747,7 @@
         } else { for (const p of pens) stamp(p.x,p.y,p.size,p.hueDeg); }
         S.prevPens = S.brush.def.connected ? pens : null;
         S.hasPainted = true; S.hasPaintedThisLevel = true;
+        AUDIO.paintTick(pointer.spd, pointer.y / H, now);
         px.globalCompositeOperation='source-over';
         // live pen markers
         fxx.save(); fxx.globalCompositeOperation='lighter';
@@ -694,6 +792,11 @@
     if (score > S.best){ S.best = score; localStorage.setItem('afterglow_best', S.best); document.getElementById('hBest').textContent = S.best; }
     if (stars > 0){ S.totalStars += stars; localStorage.setItem('afterglow_stars', S.totalStars);
       const ts=document.getElementById('totalStars'); if(ts) ts.textContent = S.totalStars + ' ★'; }
+    // streak: consecutive photos scoring 65%+ (2★ or better)
+    if (score >= 65){ S.streak++; if (S.streak >= 2) toast('🔥 '+S.streak+' in a row!'); }
+    else S.streak = 0;
+    updateStreakPill();
+    AUDIO.chord(score>=85?'win':score>=50?'next':'ok');
     document.getElementById('resultScreen').classList.remove('hidden');
   }
 
@@ -705,6 +808,35 @@
     g.fillText('AFTERGLOW', c.width-14*DPR, c.height-14*DPR);
     const a = document.createElement('a'); a.download = 'afterglow-'+Date.now()+'.png';
     a.href = c.toDataURL('image/png'); a.click(); toast('Photo saved ✓');
+  }
+  function composePhotoCanvas(){
+    const c = document.createElement('canvas'); c.width = Math.floor(W*DPR); c.height = Math.floor(H*DPR);
+    const g = c.getContext('2d'); g.drawImage(bg,0,0); g.drawImage(paint,0,0);
+    g.fillStyle='rgba(255,255,255,.5)'; g.font=`${14*DPR}px sans-serif`; g.textAlign='right';
+    g.fillText('AFTERGLOW', c.width-14*DPR, c.height-14*DPR); return c;
+  }
+  async function sharePhoto(){
+    const url = 'https://dlinacre.github.io/afterglow/';
+    const txt = 'I painted this with light in AFTERGLOW ✦';
+    try {
+      const c = composePhotoCanvas();
+      const blob = await new Promise(res => c.toBlob(res, 'image/png'));
+      const file = new File([blob], 'afterglow.png', { type:'image/png' });
+      if (navigator.canShare && navigator.canShare({ files:[file] })) {
+        await navigator.share({ files:[file], text:txt, url }); return;
+      }
+      if (navigator.share) { await navigator.share({ text:txt, url }); return; }
+    } catch(e){ if (e && e.name==='AbortError') return; }
+    // fallback: copy link, then save the image
+    try { await navigator.clipboard.writeText(url); toast('Link copied — saving image'); }
+    catch(_){ toast('Saving image'); }
+    savePhoto();
+  }
+  function updateStreakPill(){
+    const p=document.getElementById('streakPill');
+    if (S.streak >= 2 && (S.mode==='guided'||S.mode==='daily'||S.mode==='result')){
+      document.getElementById('streakVal').textContent = S.streak; p.classList.remove('hidden');
+    } else p.classList.add('hidden');
   }
 
   /* ═══════════════════════════ UI HELPERS ═══════════════════════════════ */
@@ -726,6 +858,7 @@
   /* ═══════════════════════════ INPUT ════════════════════════════════════ */
   function pos(e){ const t=e.touches?e.touches[0]:e; pointer.x=t.clientX; pointer.y=t.clientY; }
   function down(e){ if(S.mode==='menu'||S.mode==='result')return; e.preventDefault(); pos(e);
+    if(S.soundOn){ AUDIO.init(); AUDIO.resume(); AUDIO.setEnabled(true); }
     pointer.px=pointer.x; pointer.py=pointer.y; pointer.spd=0;
     pushHistory();                      // save state so this stroke can be undone
     pointer.down=true; S.painting=true;
@@ -740,23 +873,37 @@
   const show=id=>document.getElementById(id).classList.remove('hidden');
   const hide=id=>document.getElementById(id).classList.add('hidden');
 
-  document.getElementById('btnStart').onclick = ()=>{ hide('startScreen'); S.mode='guided'; S.level=1;
+  document.getElementById('btnStart').onclick = ()=>{ hide('startScreen'); S.mode='guided'; S.level=1; S.daily=false; S.streak=0; updateStreakPill();
     document.getElementById('barGuided').classList.remove('hidden'); document.getElementById('barFree').classList.add('hidden');
     loadLevel(S.level); flashHint('Follow the golden coach','then hold & drag to paint the light'); };
   document.getElementById('btnFree').onclick = ()=>{ hide('startScreen'); enterFree(); };
+  document.getElementById('btnDaily').onclick = ()=>{ hide('startScreen'); startDaily(); };
   document.getElementById('btnDevelop').onclick = developPhoto;
   document.getElementById('btnRetake').onclick = ()=>{ if(S.mode==='guided'){ clearPaint(); S.brush.reset(); resetHistory(); flashHint('Fresh frame','the shutter is reset'); } };
-  document.getElementById('btnNext').onclick = ()=>{ hide('resultScreen'); S.mode='guided'; S.level++; loadLevel(S.level); };
-  document.getElementById('btnRedo').onclick = ()=>{ hide('resultScreen'); S.mode='guided'; loadLevel(S.level); };
+  document.getElementById('btnNext').onclick = ()=>{ hide('resultScreen');
+    if (S.daily){ toast('Come back tomorrow for a new daily ✦'); S.mode='daily'; loadDaily(); }
+    else { S.mode='guided'; S.level++; loadLevel(S.level); } };
+  document.getElementById('btnRedo').onclick = ()=>{ hide('resultScreen');
+    if (S.daily){ S.mode='daily'; loadDaily(); } else { S.mode='guided'; loadLevel(S.level); } };
   document.getElementById('btnSaveResult').onclick = savePhoto;
+  document.getElementById('btnShareResult').onclick = sharePhoto;
 
-  function enterFree(){ S.mode='free'; document.getElementById('barGuided').classList.add('hidden');
+  function startDaily(){ S.daily=true; S.mode='daily'; S.streak=0; updateStreakPill();
+    document.getElementById('barGuided').classList.remove('hidden'); document.getElementById('barFree').classList.add('hidden');
+    loadDaily(); flashHint('Daily Challenge · '+todayLabel(),'same shape for everyone today — one perfect exposure'); }
+  function loadDaily(){ S.target = makeDailyShape(); buildTargetMask(); clearPaint();
+    S.hasPaintedThisLevel=false; S.brush.reset(); S.prevPens=null; resetHistory();
+    S.coachPlaying = S.coachOn;
+    document.getElementById('hMode').textContent = 'Daily · '+todayLabel();
+    document.getElementById('hTarget').textContent = S.target.name.replace('Daily · ',''); }
+
+  function enterFree(){ S.daily=false; S.mode='free'; document.getElementById('barGuided').classList.add('hidden');
     document.getElementById('barFree').classList.remove('hidden'); clearPaint(); S.brush.reset(); resetHistory();
     document.getElementById('hMode').textContent='Free Studio'; document.getElementById('hTarget').textContent='make art ✦';
     flashHint('Free Studio','pick a brush & palette in ⚙, then paint'); }
   document.getElementById('btnClear').onclick = ()=>{ pushHistory(); clearPaint(); S.brush.reset(); toast('Cleared'); };
   document.getElementById('btnSaveFree').onclick = savePhoto;
-  document.getElementById('btnExitFree').onclick = ()=>{ S.mode='menu'; document.getElementById('barFree').classList.add('hidden'); show('startScreen'); };
+  document.getElementById('btnExitFree').onclick = ()=>{ S.mode='menu'; document.getElementById('barFree').classList.add('hidden'); document.getElementById('streakPill').classList.add('hidden'); show('startScreen'); };
 
   // settings panel
   document.getElementById('btnSettings').onclick = ()=>{ renderChips(); show('settingsPanel'); };
@@ -764,7 +911,10 @@
   function bindSwitch(id, key, onChange){ const el=document.getElementById(id);
     el.onclick=()=>{ S[key]=!S[key]; el.classList.toggle('on',S[key]); onChange&&onChange(); }; }
   bindSwitch('swGuide','showGuide');
-  bindSwitch('swCoach','coachOn', ()=>{ S.coachPlaying = S.coachOn && S.mode==='guided'; });
+  bindSwitch('swCoach','coachOn', ()=>{ S.coachPlaying = S.coachOn && (S.mode==='guided'||S.mode==='daily'); });
+  document.getElementById('swSound').classList.toggle('on', S.soundOn);
+  bindSwitch('swSound','soundOn', ()=>{ localStorage.setItem('afterglow_sound', S.soundOn?'1':'0');
+    if (S.soundOn){ AUDIO.init(); AUDIO.resume(); AUDIO.setEnabled(true); } else AUDIO.setEnabled(false); });
 
   // undo / redo buttons (both toolbars)
   document.getElementById('btnUndoG').onclick = undo;
@@ -789,7 +939,7 @@
     const k=e.key.toLowerCase();
     if (k==='z'){ undo(); e.preventDefault(); }
     else if (k==='x'){ redo(); e.preventDefault(); }
-    else if (k===' ' && S.mode==='guided'){ developPhoto(); e.preventDefault(); }
+    else if (k===' ' && (S.mode==='guided'||S.mode==='daily')){ developPhoto(); e.preventDefault(); }
     else if (k==='c' && S.mode==='free'){ pushHistory(); clearPaint(); toast('Cleared'); }
     else if (k==='arrowup' || k==='arrowdown'){
       szRange.value = Math.max(55, Math.min(180, +szRange.value + (k==='arrowup'?5:-5)));
