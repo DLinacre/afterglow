@@ -54,6 +54,8 @@ deep to master — and it teaches you to draw better as you play.
 | 📅 **Daily Challenge** | One shape seeded by the date — the same for everyone, all day. |
 | 🔊 **Generative audio** | A synthesised ambient pad plus chimes that follow your painting speed & height. No audio files — it's all live. |
 | 🔥 **Streaks** | Chain photos that score 65%+ for a running streak counter. |
+| 🔓 **Unlockables** | Earn lifetime stars to unlock 5 brushes & 6 palettes — a reason to keep playing. |
+| 🖼️ **Gallery** | Tap **Keep** to save your best shots locally and flip back through them anytime. |
 | ↶ **Undo / Redo** | Full stroke history (up to 20 steps) — never fear a wrong move. Works with `Z` / `X` keys too. |
 | 🖌️ **10 brushes** | Comet, Ribbon, Sparkler, Neon Pen, **Ink** (speed = pressure), **Chroma** (rainbow split), plus **Mirror**, **Trine**, **Kaleidoscope** & **Bloom** for instant symmetry art. |
 | 📏 **Brush size** | A size slider (55–180%) — plus `↑`/`↓` keys — for fine detail or bold sweeps. |
@@ -115,8 +117,9 @@ Live at **https://DLinacre.github.io/afterglow/**.
 - [x] Ambient audio that responds to painting speed
 - [x] Daily challenge (seed the RNG with the date)
 - [x] Native share sheet via the Web Share API
+- [x] Unlockable brushes & palettes tied to star totals
+- [x] Local gallery of saved shots
 - [ ] "No-go" dark-zone tension mode (scoring mask already exists)
-- [ ] Unlockable brushes & palettes tied to star totals
 - [ ] Online leaderboard for the daily challenge
 
 ## 📄 License

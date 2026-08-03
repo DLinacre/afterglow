@@ -134,6 +134,21 @@ To add new sounds, add a method to the module and call it from the relevant even
 same shape for the whole day. `startDaily()` / `loadDaily()` mirror the guided flow but
 never advance a level. Great seam for a future online leaderboard.
 
+## 7e. Unlocks
+
+Star-gating lives in two plain maps near the `BRUSHES` array:
+`BRUSH_UNLOCKS = { id: starCost }` and `PALETTE_UNLOCKS = { name: starCost }`. Anything
+not listed is free. `renderChips()` shows a 🔒 + cost on locked items and blocks
+selection; crossing a threshold (detected in `showResult()`) pops an "Unlocked!" banner.
+To gate a new brush/palette, add one line to the relevant map — nothing else to touch.
+
+## 7f. Gallery
+
+`GALLERY` (localStorage-backed) stores up to 24 downscaled JPEG thumbnails, newest first.
+`keepShot()` snapshots the current composed photo (`composePhotoCanvas()`), `openGallery()`
+renders the grid with per-item delete. Thumbnails are ~270px wide to stay well under the
+storage quota.
+
 ## 8. Ideas parked for later
 - Ambient audio that responds to painting speed.
 - "No-go" dark zones for a tension mode (mask already exists — just penalise entry live).
